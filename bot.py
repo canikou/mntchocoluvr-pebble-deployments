@@ -36,6 +36,11 @@ BOTS = (
         root=ROOT / "bots" / "bakunawa",
         stop_file=ROOT / "bots" / "bakunawa" / "data" / "bakunawa-mech.stop",
     ),
+    BotSpec(
+        name="UWU Cafe",
+        root=ROOT / "bots" / "uwu-cafe",
+        stop_file=ROOT / "bots" / "uwu-cafe" / "data" / "uwu-cafe.stop",
+    ),
 )
 
 shutdown_signal: str | None = None

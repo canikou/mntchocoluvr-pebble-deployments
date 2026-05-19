@@ -1,0 +1,38 @@
+[discord]
+token = "PUT_YOUR_BOT_TOKEN_HERE"
+# Optional: set this if you want instant slash-command registration in a test guild.
+test_guild_id = 0
+prefix = "u!"
+message_content_intent = true
+admin_user_ids = [1]
+admin_channel_ids = [0]
+# Forum channel where users keep one sales-log thread per person.
+allowed_channel_ids = [0]
+# Normal text channel where users run u!remit.
+remit_channel_id = 0
+status_text = "logging combos for UWU Cafe <3"
+stats_delete_after_seconds = 60
+pending_upload_timeout_seconds = 180
+# Optional: auto-delete short-lived public replies like stats/help after this many seconds.
+transient_message_timeout_seconds = 120
+# Kept for legacy panel timeouts; u!log and u!remit complete in one message.
+receipt_idle_timeout_seconds = 1200
+# Kept for legacy panel timeouts.
+receipt_idle_warning_seconds = 600
+log_seen_messages = false
+
+[storage]
+database_path = "data/uwu-cafe.sqlite"
+catalog_path = "config/catalog.toml"
+packages_path = "config/packages.toml"
+# Optional: announcement templates shown by u!templates.
+templates_path = "config/templates.json"
+# Optional: contract presets retained for import compatibility.
+contracts_path = "config/contracts.json"
+export_dir = "exports"
+import_dir = "import"
+attachment_dir = "data/attachments"
+log_dir = "logs"
+
+[logging]
+level = "info"

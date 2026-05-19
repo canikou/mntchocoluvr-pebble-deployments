@@ -1,0 +1,7 @@
+[[items]]
+name = "UWU Cafe Combo"
+aliases = ["combo", "uwu combo", "food drink combo", "food and drinks"]
+unit_price = 15000
+unit_cost = 0
+category = "COMBO"
+active = true

@@ -1,4 +1,4 @@
-# YouTool + Bakunawa Mech Pebble Deployment
+# YouTool + Bakunawa Mech + UWU Cafe Pebble Deployment
 
 This repository is the public PebbleHost deployment mirror for the Discord bots that run on the
 same PebbleHost instance.
@@ -15,6 +15,7 @@ Its job is simple:
 - YouTool private working branch: `develop` is for in-progress changes before they are promoted to `master`
 - legacy reference branch: `legacy-rust` preserves the outdated original Rust implementation
 - Bakunawa Mech source is mirrored into `bots/bakunawa/`
+- UWU Cafe source is mirrored into `bots/uwu-cafe/`
 - this repo: `main` is the deployment branch the remote PebbleHost bot pulls on restart
 
 ## Runtime Layout
@@ -22,6 +23,7 @@ Its job is simple:
 - `bot.py` is the PebbleHost start file and multi-bot launcher.
 - The root repository directory runs YouTool.
 - `bots/bakunawa/` runs Bakunawa Mech.
+- `bots/uwu-cafe/` runs UWU Cafe.
 - Each bot has its own `config/`, `data/`, `logs/`, `exports/`, and `import/` directory.
 - Each bot must use a different Discord token.
 
@@ -35,6 +37,9 @@ Include:
 - `bots/bakunawa/src/`
 - `bots/bakunawa/migrations/`
 - `bots/bakunawa/bot.py`
+- `bots/uwu-cafe/src/`
+- `bots/uwu-cafe/migrations/`
+- `bots/uwu-cafe/bot.py`
 - `requirements.txt`
 - safe shared config assets
 
@@ -42,6 +47,7 @@ Do not include:
 
 - `config/app.toml`
 - `bots/bakunawa/config/app.toml`
+- `bots/uwu-cafe/config/app.toml`
 - `.env*`
 - `data/`
 - `bots/*/data/`
@@ -63,5 +69,5 @@ Do not include:
 - Keep the Python start file set to `bot.py`.
 - Keep the Git branch set to `main`.
 - Store live tokens only in PebbleHost runtime config files or environment variables.
-- If using config files, create both `config/app.toml` and `bots/bakunawa/config/app.toml` from their `.example` files.
-- If using environment variables, set `YT_ASSIST_DISCORD_TOKEN` for YouTool and `BAKUNAWA_MECH_DISCORD_TOKEN` for Bakunawa Mech.
+- If using config files, create `config/app.toml`, `bots/bakunawa/config/app.toml`, and `bots/uwu-cafe/config/app.toml` from their `.example` files.
+- If using environment variables, set `YT_ASSIST_DISCORD_TOKEN` for YouTool, `BAKUNAWA_MECH_DISCORD_TOKEN` for Bakunawa Mech, and `UWU_CAFE_DISCORD_TOKEN` for UWU Cafe.
