@@ -13,6 +13,7 @@ from yt_assist.domain.contracts import Contracts
 from yt_assist.domain.packages import PackageCatalog
 from yt_assist.domain.templates import TemplateLoadStatus
 from yt_assist.domain.templates import initialize as initialize_templates
+from yt_assist.domain.uwu import load_remit_statuses
 from yt_assist.logging import LoggingGuards, cleanup_old_log_files, init_logging
 from yt_assist.storage.database import Database
 
@@ -64,6 +65,9 @@ async def build_runtime_context_with_options(
 
     contracts = Contracts.load_from(config.storage.contracts_path, catalog)
     LOGGER.info("loaded %s contract presets", len(contracts.entries))
+
+    remit_statuses = load_remit_statuses(config.storage.remit_items_path)
+    LOGGER.info("loaded %s remit item statuses", len(remit_statuses))
 
     database = await Database.connect(config.storage.database_path)
     LOGGER.info("database ready")

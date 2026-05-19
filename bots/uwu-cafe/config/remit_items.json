@@ -1,0 +1,11 @@
+{
+  "items": {
+    "tomato": true,
+    "packed_meat": true,
+    "arabica": true,
+    "wheat": true,
+    "spatula": true,
+    "cooking_oil": true,
+    "glass": true
+  }
+}

@@ -298,6 +298,7 @@ class LeaderboardEntry:
     total_sales: int
     procurement_cost: int
     receipt_count: int
+    commission_cents: int = 0
 
 
 @dataclass(slots=True)

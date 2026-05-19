@@ -55,6 +55,7 @@ class StorageConfig(BaseModel):
     packages_path: Path = Path("config") / "packages.toml"
     templates_path: Path = Path("config") / "templates.json"
     contracts_path: Path = Path("config") / "contracts.json"
+    remit_items_path: Path = Path("config") / "remit_items.json"
     export_dir: Path
     import_dir: Path = Path("import")
     attachment_dir: Path
@@ -109,6 +110,7 @@ class AppConfig(BaseModel):
             self.storage.packages_path.parent,
             self.storage.templates_path.parent,
             self.storage.contracts_path.parent,
+            self.storage.remit_items_path.parent,
         }
         for directory in sorted(path for path in directories if path is not None):
             directory.mkdir(parents=True, exist_ok=True)

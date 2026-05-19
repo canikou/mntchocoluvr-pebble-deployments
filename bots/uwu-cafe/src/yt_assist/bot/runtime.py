@@ -49,9 +49,16 @@ from yt_assist.domain.uwu import (
     COMBO_ITEM_NAME,
     COMBO_UNIT_COST,
     COMBO_UNIT_PRICE,
+    combo_discount_amount,
     combo_commission_cents,
+    combo_effective_unit_price,
+    combo_sale_total,
+    load_remit_statuses,
     parse_combo_quantity,
     parse_remit_args,
+    remit_catalog_items,
+    set_all_remit_items_enabled,
+    set_remit_item_enabled,
 )
 from yt_assist.single_instance import SingleInstanceError, SingleInstanceGuard
 from yt_assist.storage.database import ImportPreview, ImportReport
@@ -99,6 +106,7 @@ from .render import (
     receipt_log_payload,
     receipt_main_payload,
     render_stats_description,
+    remit_status_embed,
     task_error_embed,
     task_status_embed,
     task_warning_embed,
@@ -982,6 +990,9 @@ class BakunawaMechDiscordClient(discord.Client):
             if command_name == "manage":
                 await self._run_manage_prefix(message)
                 return
+            if command_name == "manageremit":
+                await self._run_manageremit_prefix(message)
+                return
             if command_name == "adjustprices":
                 await self._run_adjustprices_prefix(message)
                 return
@@ -1192,6 +1203,7 @@ class BakunawaMechDiscordClient(discord.Client):
                 self._configured_main_channel_id(),
                 self._configured_admin_channel_id(),
                 self.base_runtime.config.discord.receipt_log_channel_id,
+                self.base_runtime.config.discord.remit_channel_id,
             )
             if channel is not None
         }
@@ -1199,6 +1211,8 @@ class BakunawaMechDiscordClient(discord.Client):
     def _lifecycle_channel_role(self, channel_id: int) -> str:
         if channel_id in self.base_runtime.config.discord.admin_channel_ids:
             return "admin"
+        if channel_id == self.base_runtime.config.discord.remit_channel_id:
+            return "remit"
         if channel_id == self.base_runtime.config.discord.receipt_log_channel_id:
             return "log"
         return "main"
@@ -1213,6 +1227,7 @@ class BakunawaMechDiscordClient(discord.Client):
             admin_channel_id = self._configured_admin_channel_id()
             main_channel_id = self._configured_main_channel_id()
             log_channel_id = self.base_runtime.config.discord.receipt_log_channel_id
+            remit_channel_id = self.base_runtime.config.discord.remit_channel_id
             if admin_channel_id is not None:
                 await self._refresh_lifecycle_status_message(
                     admin_channel_id,
@@ -1231,6 +1246,15 @@ class BakunawaMechDiscordClient(discord.Client):
             ):
                 await self._refresh_lifecycle_status_message(
                     log_channel_id,
+                    force=force,
+                    respect_active_session=respect_active_session,
+                )
+            if (
+                remit_channel_id is not None
+                and remit_channel_id not in {main_channel_id, admin_channel_id, log_channel_id}
+            ):
+                await self._refresh_lifecycle_status_message(
+                    remit_channel_id,
                     force=force,
                     respect_active_session=respect_active_session,
                 )
@@ -1264,6 +1288,7 @@ class BakunawaMechDiscordClient(discord.Client):
             self._configured_main_channel_id(),
             self._configured_admin_channel_id(),
             self.base_runtime.config.discord.receipt_log_channel_id,
+            self.base_runtime.config.discord.remit_channel_id,
         ]:
             if channel_id is not None and channel_id > 0:
                 self._schedule_lifecycle_status_refresh(channel_id, delay_seconds=delay_seconds)
@@ -1300,9 +1325,11 @@ class BakunawaMechDiscordClient(discord.Client):
             status = self._admin_status
         elif channel_role == "log":
             status = self._log_status
+        elif channel_role == "remit":
+            status = self._main_status
         else:
             status = self._main_status
-        if status is None:
+        if status is None and channel_role != "remit":
             self._status_message_ids.pop(channel_id, None)
             self._stats_message_ids.pop(channel_id, None)
             return
@@ -1345,8 +1372,8 @@ class BakunawaMechDiscordClient(discord.Client):
         if channel_role == "admin":
             status_payload = embed_from_payload(
                 lifecycle_status_embed(
-                    status.kind.value,
-                    status.description,
+                    status.kind.value if status is not None else "online",
+                    status.description if status is not None else "UWU Cafe bot is online.",
                     channel_role=channel_role,
                 )
             )
@@ -1370,6 +1397,18 @@ class BakunawaMechDiscordClient(discord.Client):
                 )
                 self._status_message_ids[channel_id] = status_message.id
             self._stats_message_ids.pop(channel_id, None)
+            return
+
+        if channel_role == "remit":
+            existing = await self._collect_lifecycle_card_messages(channel)
+            for message in existing:
+                await _safe_delete_message(message)
+            status_message = await channel.send(
+                embed=embed_from_payload(self._remit_status_embed()),
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
+            self._stats_message_ids.pop(channel_id, None)
+            self._status_message_ids[channel_id] = status_message.id
             return
 
         existing = await self._collect_lifecycle_card_messages(channel)
@@ -1618,6 +1657,12 @@ class BakunawaMechDiscordClient(discord.Client):
         remit_channel_id = self.base_runtime.config.discord.remit_channel_id
         return remit_channel_id is not None and _configured_parent_channel_id(channel) == remit_channel_id
 
+    def _remit_statuses(self) -> dict[str, bool]:
+        return load_remit_statuses(self.base_runtime.config.storage.remit_items_path)
+
+    def _remit_status_embed(self, *, manager: bool = False) -> EmbedPayload:
+        return remit_status_embed(remit_catalog_items(self._remit_statuses()), manager=manager)
+
     async def _run_log_prefix(self, message: discord.Message, remainder: str) -> None:
         if not self._is_allowed_messageable_channel(message.channel):
             await message.channel.send(
@@ -1671,6 +1716,7 @@ class BakunawaMechDiscordClient(discord.Client):
                     "total_sale": receipt.total_sale,
                     "company_cost": receipt.procurement_cost,
                     "combo_count": combo_count,
+                    "discount": combo_discount_amount(combo_count),
                     "commission_cents": combo_commission_cents(combo_count),
                     "proof_message_id": message.id,
                     "proof_urls": proof_urls,
@@ -1690,11 +1736,10 @@ class BakunawaMechDiscordClient(discord.Client):
                 embed_from_payload(
                     task_status_embed(
                         "UWU Cafe Log",
-                        (
-                            f"Saved `{receipt_id}` for <@{message.author.id}>.\n"
-                            f"Combos: {combo_count:,}\n"
-                            f"Sales: ${COMBO_UNIT_PRICE * combo_count:,}\n"
-                            f"Commission: ${combo_commission_cents(combo_count) // 100:,}"
+                        self._combo_log_confirmation(
+                            receipt_id=receipt_id,
+                            user_id=message.author.id,
+                            combo_count=combo_count,
                         ),
                     )
                 )
@@ -1702,6 +1747,20 @@ class BakunawaMechDiscordClient(discord.Client):
             allowed_mentions=discord.AllowedMentions.none(),
         )
         self._schedule_all_lifecycle_status_refreshes(delay_seconds=0.25)
+
+    def _combo_log_confirmation(self, *, receipt_id: str, user_id: int, combo_count: int) -> str:
+        subtotal = combo_count * COMBO_UNIT_PRICE
+        discount = combo_discount_amount(combo_count)
+        total_sale = combo_sale_total(combo_count)
+        lines = [
+            f"Saved `{receipt_id}` for <@{user_id}>.",
+            f"Combos: {combo_count:,}",
+            f"Sales: ${total_sale:,}",
+        ]
+        if discount:
+            lines.append(f"Bulk discount: -${discount:,} from ${subtotal:,}")
+        lines.append(f"Commission: ${combo_commission_cents(combo_count) // 100:,}")
+        return "\n".join(lines)
 
     async def _run_remit_prefix(self, message: discord.Message, remainder: str) -> None:
         if not self._is_remit_messageable_channel(message.channel):
@@ -1721,6 +1780,19 @@ class BakunawaMechDiscordClient(discord.Client):
         except ValueError as error:
             await message.channel.send(
                 embeds=[embed_from_payload(task_error_embed("UWU Cafe Remit", str(error)))]
+            )
+            return
+        statuses = self._remit_statuses()
+        if not statuses.get(item.key, True):
+            await message.channel.send(
+                embeds=[
+                    embed_from_payload(
+                        task_error_embed(
+                            "UWU Cafe Remit",
+                            f"{item.display_name} is currently closed for remit.",
+                        )
+                    )
+                ]
             )
             return
         proof_attachments = _receipt_like_attachments(message)
@@ -1825,12 +1897,12 @@ class BakunawaMechDiscordClient(discord.Client):
         proof_urls: list[str],
     ) -> tuple[NewReceipt, ReceiptAccountingRecord]:
         finalized_at = utcnow()
-        total_sale = combo_count * COMBO_UNIT_PRICE
+        total_sale = combo_sale_total(combo_count)
         total_cost = combo_count * COMBO_UNIT_COST
         item = PricedItem(
             item_name=COMBO_ITEM_NAME,
             quantity=combo_count,
-            unit_sale_price=COMBO_UNIT_PRICE,
+            unit_sale_price=combo_effective_unit_price(combo_count),
             unit_cost=COMBO_UNIT_COST,
             pricing_source=PricingSource.DEFAULT,
             line_sale_total=total_sale,
@@ -1901,6 +1973,19 @@ class BakunawaMechDiscordClient(discord.Client):
                 )
             return
         await self._send_manage_panel_message(message.author, message.channel)
+
+    async def _run_manageremit_prefix(self, message: discord.Message) -> None:
+        if not self._is_admin_user(message.author.id):
+            await message.channel.send(
+                embeds=[embed_from_payload(task_error_embed("UWU Cafe Access", "You are not an admin for this bot."))]
+            )
+            return
+        if not self._is_admin_channel_id(message.channel.id):
+            await message.channel.send(
+                embeds=[embed_from_payload(task_error_embed("UWU Cafe Access", "This admin command is not enabled in this channel."))]
+            )
+            return
+        await self._send_manageremit_panel(message.author, message.channel)
 
     async def _run_adjustprices_prefix(self, message: discord.Message) -> None:
         if not self._is_admin_user(message.author.id):
@@ -3126,6 +3211,66 @@ class BakunawaMechDiscordClient(discord.Client):
             AdjustPriceModal(self, owner_id, item_index, self.base_runtime.catalog.items[item_index])
         )
 
+    async def _handle_manageremit_component(
+        self,
+        interaction: discord.Interaction[Any],
+        custom_id: str,
+    ) -> None:
+        parts = custom_id.split("|")
+        if len(parts) < 3 or parts[1] != "toggle":
+            await interaction.response.send_message("Malformed remit manager component.", ephemeral=True)
+            return
+        owner_id = int(parts[2])
+        if owner_id != interaction.user.id:
+            await interaction.response.send_message("This remit manager belongs to another user.", ephemeral=True)
+            return
+        if not self._is_admin_user(interaction.user.id):
+            await interaction.response.send_message("You are not an admin for this bot.", ephemeral=True)
+            return
+        values = _interaction_values(interaction)
+        if not values:
+            await interaction.response.send_message("No remit item was selected.", ephemeral=True)
+            return
+
+        selected = values[0]
+        path = self.base_runtime.config.storage.remit_items_path
+        notice = "Updated remit item availability."
+        if selected == "all:on":
+            set_all_remit_items_enabled(path, True)
+            notice = "All remit items are now open."
+        elif selected == "all:off":
+            set_all_remit_items_enabled(path, False)
+            notice = "All remit items are now closed."
+        elif selected.startswith("item:"):
+            key = selected.removeprefix("item:")
+            statuses = self._remit_statuses()
+            if key not in statuses:
+                await interaction.response.send_message("Selected remit item no longer exists.", ephemeral=True)
+                return
+            item = next(entry for entry in remit_catalog_items(statuses) if entry.key == key)
+            statuses = set_remit_item_enabled(path, key, not item.enabled)
+            updated_item = next(entry for entry in remit_catalog_items(statuses) if entry.key == key)
+            notice = f"{updated_item.display_name} is now {'open' if updated_item.enabled else 'closed'} for remit."
+        else:
+            await interaction.response.send_message("Unknown remit manager action.", ephemeral=True)
+            return
+
+        embed = self._remit_status_embed(manager=True)
+        embed.field("Last Update", notice, False)
+        await interaction.response.edit_message(
+            content="",
+            embeds=[embed_from_payload(embed)],
+            view=self._build_manageremit_view(interaction.user.id),
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
+        remit_channel_id = self.base_runtime.config.discord.remit_channel_id
+        if remit_channel_id is not None:
+            await self._refresh_lifecycle_status_message(
+                remit_channel_id,
+                force=True,
+                respect_active_session=False,
+            )
+
     async def _handle_import_component(
         self,
         interaction: discord.Interaction[Any],
@@ -3275,6 +3420,27 @@ class BakunawaMechDiscordClient(discord.Client):
             interaction=interaction,
         )
         await self._send_reply(dispatch, payload)
+
+    async def _send_manageremit_panel(
+        self,
+        actor: discord.abc.User,
+        channel: discord.abc.MessageableChannel,
+        interaction: discord.Interaction[Any] | None = None,
+    ) -> None:
+        payload = ReplyPayload(
+            embeds=[self._remit_status_embed(manager=True)],
+            ephemeral=interaction is not None,
+        )
+        dispatch = DiscordDispatchContext(
+            actor=_actor_from_user(actor),
+            channel=_channel_from_id(self.base_runtime, _configured_parent_channel_id(channel)),
+            channel_object=channel,
+            is_interaction=interaction is not None,
+            interaction=interaction,
+        )
+        await self._send_reply(dispatch, payload)
+        if dispatch.reply_message is not None:
+            await dispatch.reply_message.edit(view=self._build_manageremit_view(actor.id))
 
     async def _send_adjustprices_panel(
         self,
@@ -4801,6 +4967,41 @@ class BakunawaMechDiscordClient(discord.Client):
             )
         return view
 
+    def _build_manageremit_view(self, owner_user_id: int) -> discord.ui.View:
+        timeout = self.base_runtime.config.discord.transient_message_timeout_seconds
+        view = DispatchView(self, timeout)
+        catalog_items = remit_catalog_items(self._remit_statuses())
+        options = [
+            discord.SelectOption(
+                label="Turn All On",
+                value="all:on",
+                description="Enable every remit item.",
+            ),
+            discord.SelectOption(
+                label="Turn All Off",
+                value="all:off",
+                description="Disable every remit item.",
+            ),
+        ]
+        options.extend(
+            discord.SelectOption(
+                label=item.display_name,
+                value=f"item:{item.key}",
+                description=f"${item.unit_rate:,}/piece | {'Open' if item.enabled else 'Closed'}",
+            )
+            for item in catalog_items
+        )
+        view.add_item(
+            DispatchSelect(
+                client=self,
+                custom_id=f"manageremit|toggle|{owner_user_id}",
+                placeholder="Toggle remit item availability",
+                options=options[:25],
+                row=0,
+            )
+        )
+        return view
+
     async def _handle_pending_import(self, message: discord.Message) -> bool:
         async with self._pending_lock:
             pending = self._pending_imports.get(message.author.id)
@@ -5559,6 +5760,9 @@ class BakunawaMechDiscordClient(discord.Client):
             return
         if custom_id.startswith("contracts|"):
             await self._handle_contracts_component(interaction, custom_id)
+            return
+        if custom_id.startswith("manageremit|"):
+            await self._handle_manageremit_component(interaction, custom_id)
             return
         if custom_id.startswith("adjustprices|"):
             await self._handle_adjustprices_component(interaction, custom_id)
@@ -7068,8 +7272,16 @@ def _is_lifecycle_stats_message(message: discord.Message) -> bool:
     )
 
 
+def _is_remit_status_message(message: discord.Message) -> bool:
+    return any(embed.title == "UWU Cafe Remit Status" for embed in message.embeds)
+
+
 def _is_lifecycle_card_message(message: discord.Message) -> bool:
-    return _is_lifecycle_status_message(message) or _is_lifecycle_stats_message(message)
+    return (
+        _is_lifecycle_status_message(message)
+        or _is_lifecycle_stats_message(message)
+        or _is_remit_status_message(message)
+    )
 
 
 def _is_log_related_message(message: discord.Message, bot_user_id: int | None) -> bool:
@@ -7667,6 +7879,9 @@ def _leaderboard_from_receipts(receipts) -> list[LeaderboardEntry]:
         current.total_sales += receipt.total_sale
         current.procurement_cost += receipt.procurement_cost
         current.receipt_count += 1
+        combo_count = sum(item.quantity for item in receipt.items if item.item_name == COMBO_ITEM_NAME)
+        if combo_count > 0:
+            current.commission_cents += combo_commission_cents(combo_count)
     return sorted(
         buckets.values(),
         key=lambda entry: (-entry.total_sales, -entry.procurement_cost, -entry.receipt_count, entry.display_name),

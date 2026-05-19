@@ -21,7 +21,10 @@ from yt_assist.domain.models import (
 from yt_assist.domain.proof import split_proof_values
 from yt_assist.domain.uwu import (
     COMBO_COMMISSION_CENTS,
+    COMBO_ITEM_NAME,
     COMBO_UNIT_PRICE,
+    RemitCatalogItem,
+    combo_commission_cents,
     combo_commission_cents_from_sale,
 )
 
@@ -33,6 +36,7 @@ THEME_ERROR = 0xC1121F
 THEME_LIFECYCLE_ONLINE = 0x7C3AED
 LIFECYCLE_STATUS_TITLE = "UWU Cafe Status"
 LIFECYCLE_STATS_TITLE = "UWU Cafe Live Stats"
+REMIT_STATUS_TITLE = "UWU Cafe Remit Status"
 HELP_PAGE_COUNT = 4
 
 BUTTON_STYLE_PRIMARY = 1
@@ -233,6 +237,7 @@ def lifecycle_status_embed(state: str, description: str, *, channel_role: str = 
         field_name = "Admin Commands"
         field_value = (
             "`u!manage` - open log manager\n"
+            "`u!manageremit` - manage remit item availability\n"
             "`u!payouts` - view payout totals\n"
             "`u!reset` - close out active logs\n"
             "`u!export` - export a backup"
@@ -248,8 +253,9 @@ def lifecycle_status_embed(state: str, description: str, *, channel_role: str = 
         field_name = "Common Commands"
         field_value = (
             "`u!log <count>` - log combo sales with proof\n"
+            "`u!remit <item> <amount>` - remit materials with proof\n"
             "`u!stats` - view all employee stats\n"
-            "`u!templates` - view current templates"
+            "`u!help` - view commands"
         )
 
     return (
@@ -267,6 +273,7 @@ def lifecycle_stats_embed(entries: list[LeaderboardEntry]) -> EmbedPayload:
     total_sales = sum(entry.total_sales for entry in entries)
     total_company_cost = sum(entry.procurement_cost for entry in entries)
     total_profit = total_sales - total_company_cost
+    total_payout_cents = sum(entry.commission_cents for entry in entries)
     total_receipts = sum(entry.receipt_count for entry in entries)
     top_lines = (
         "No logs counted in stats yet."
@@ -290,11 +297,23 @@ def lifecycle_stats_embed(entries: list[LeaderboardEntry]) -> EmbedPayload:
             (
                 f"Total Sales ${format_money(total_sales)}\n"
                 f"Company Cost ${format_money(total_company_cost)}\n"
-                f"Total Staff Commission ${format_money_cents(_staff_payout_cents(total_profit))}"
+                f"Total Staff Commission ${format_money_cents(total_payout_cents)}"
             ),
             False,
         )
     )
+
+
+def remit_status_embed(items: list[RemitCatalogItem], *, manager: bool = False) -> EmbedPayload:
+    lines = [
+        f"- {'✅' if item.enabled else '❌'} {item.display_name.upper()} {format_money(item.unit_rate)}/piece"
+        for item in items
+    ]
+    description = "Remittable Items:\n" + ("\n".join(lines) if lines else "- No remit items configured.")
+    embed = panel_embed("UWU Cafe Remit Manager" if manager else REMIT_STATUS_TITLE, description)
+    if manager:
+        embed.field("Manage", "Use the dropdown below to toggle one item or all items.", False)
+    return embed
 
 
 def render_stats_description(entries: list[LeaderboardEntry]) -> str:
@@ -375,6 +394,13 @@ def _staff_payout_cents(profit: int) -> int:
     return combo_commission_cents_from_sale(profit)
 
 
+def _staff_payout_cents_from_receipt(total_sale: int, items: list[PricedItem]) -> int:
+    combo_count = sum(item.quantity for item in items if item.item_name == COMBO_ITEM_NAME)
+    if combo_count > 0:
+        return combo_commission_cents(combo_count)
+    return combo_commission_cents_from_sale(total_sale)
+
+
 def _company_net_profit_after_staff_payout_cents(profit: int, total_payout_cents: int) -> int:
     return profit * 100 - total_payout_cents
 
@@ -422,6 +448,7 @@ def help_page_embed(prefix: str, page: int) -> EmbedPayload:
             "Admin Commands",
             (
                 f"`{prefix}manage` / `/mechmanage` - Open the log manager\n"
+                f"`{prefix}manageremit` - Manage remit item availability\n"
                 f"`{prefix}payouts` / `/mechpayouts` - Show staff payout totals\n"
                 f"`{prefix}payoutoffset` / `/mechpayoutoffset` - Add a payout-time credit or deduction\n"
                 f"`{prefix}payoutsplit` / `/mechpayoutsplit` - Split one user's payout across other staff\n"
@@ -462,13 +489,14 @@ def help_page_embed(prefix: str, page: int) -> EmbedPayload:
             (
                 f"Combos are ${format_money(COMBO_UNIT_PRICE)} each and pay "
                 f"${format_money_cents(COMBO_COMMISSION_CENTS)} commission each.\n"
+                "Orders of 20+ combos automatically receive 10% off.\n"
                 f"`{prefix}log 3` records three combos for the message author.\n"
                 "`packedmeat`, `packed meat`, and `pmeat` all work for Packed Meat remits."
             ),
             False,
         ).field(
             "Permissions",
-            "Everyone: `log`, `remit`, `stats`, `note`, `help`, `health`\nAdmins only: `manage`, `payouts`, `payoutoffset`, `payoutsplit`, `refresh`, `templates`, `reset`, `export`, `import`, `fixpreviews`, `clean`, `restartbot`, `stop`",
+            "Everyone: `log`, `remit`, `stats`, `note`, `help`, `health`\nAdmins only: `manage`, `manageremit`, `payouts`, `payoutoffset`, `payoutsplit`, `refresh`, `templates`, `reset`, `export`, `import`, `fixpreviews`, `clean`, `restartbot`, `stop`",
             False,
         )
     return embed.with_footer(f"Page {page + 1}/{HELP_PAGE_COUNT} - Use Prev/Next to browse.")
@@ -506,7 +534,7 @@ def stats_embed(sort: StatsSort, entries: list[LeaderboardEntry]) -> EmbedPayloa
     total_sales = sum(entry.total_sales for entry in entries)
     total_procurement = sum(entry.procurement_cost for entry in entries)
     total_profit = total_sales - total_procurement
-    total_payout_cents = _staff_payout_cents(total_profit)
+    total_payout_cents = sum(entry.commission_cents for entry in entries)
     company_net_profit_after_staff_payout = _company_net_profit_after_staff_payout_cents(
         total_profit,
         total_payout_cents,
@@ -1167,11 +1195,12 @@ def receipt_embed(
 ) -> EmbedPayload:
     creator_username, creator_user_id = creator
     items_text = "\n".join(_receipt_item_lines(items))
+    staff_payout_cents = _staff_payout_cents_from_receipt(total_sale, items)
     description = (
         f"**Total Sale:** ${format_money(total_sale)}\n"
         f"**Company Cost:** ${format_money(procurement_cost)}\n"
         f"**Profit:** ${format_money(profit)}\n"
-        f"**Commission:** ${format_money_cents(_staff_payout_cents(profit))}\n"
+        f"**Commission:** ${format_money_cents(staff_payout_cents)}\n"
         f"**Credited To:** {creator_username} ({creator_user_id})\n\n"
         f"**Items and Materials:**\n{items_text}"
     )

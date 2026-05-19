@@ -29,6 +29,8 @@ packages_path = "config/packages.toml"
 templates_path = "config/templates.json"
 # Optional: contract presets retained for import compatibility.
 contracts_path = "config/contracts.json"
+# Optional: enabled/disabled remit item state for u!manageremit.
+remit_items_path = "config/remit_items.json"
 export_dir = "exports"
 import_dir = "import"
 attachment_dir = "data/attachments"

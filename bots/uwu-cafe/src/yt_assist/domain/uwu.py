@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
+from pathlib import Path
 
 COMBO_ITEM_NAME = "UWU Cafe Combo"
 COMBO_UNIT_PRICE = 15_000
 COMBO_UNIT_COST = 0
 COMBO_COMMISSION_CENTS = 5_000 * 100
+BULK_DISCOUNT_MIN_COMBOS = 20
+BULK_DISCOUNT_BPS = 1_000
+BPS_DENOMINATOR = 10_000
 
 REMIT_RATES: dict[str, int] = {
     "tomato": 80,
@@ -44,13 +49,45 @@ class RemitItem:
     unit_rate: int
 
 
+@dataclass(frozen=True, slots=True)
+class RemitCatalogItem:
+    key: str
+    display_name: str
+    unit_rate: int
+    enabled: bool
+
+
 def combo_commission_cents(quantity: int) -> int:
     return quantity * COMBO_COMMISSION_CENTS
+
+
+def combo_discount_bps(quantity: int) -> int:
+    return BULK_DISCOUNT_BPS if quantity >= BULK_DISCOUNT_MIN_COMBOS else 0
+
+
+def combo_discount_amount(quantity: int) -> int:
+    subtotal = quantity * COMBO_UNIT_PRICE
+    return subtotal * combo_discount_bps(quantity) // BPS_DENOMINATOR
+
+
+def combo_sale_total(quantity: int) -> int:
+    subtotal = quantity * COMBO_UNIT_PRICE
+    return subtotal - combo_discount_amount(quantity)
+
+
+def combo_effective_unit_price(quantity: int) -> int:
+    if quantity <= 0:
+        return COMBO_UNIT_PRICE
+    return combo_sale_total(quantity) // quantity
 
 
 def combo_quantity_from_sale(total_sale: int) -> int:
     if total_sale <= 0:
         return 0
+    highest_possible_quantity = total_sale // (COMBO_UNIT_PRICE - (COMBO_UNIT_PRICE * BULK_DISCOUNT_BPS // BPS_DENOMINATOR))
+    for quantity in range(highest_possible_quantity + 1, 0, -1):
+        if combo_sale_total(quantity) == total_sale:
+            return quantity
     return total_sale // COMBO_UNIT_PRICE
 
 
@@ -95,6 +132,72 @@ def remit_item(key: str) -> RemitItem:
         display_name=key.replace("_", " ").title(),
         unit_rate=REMIT_RATES[key],
     )
+
+
+def default_remit_statuses() -> dict[str, bool]:
+    return {key: True for key in REMIT_RATES}
+
+
+def load_remit_statuses(path: Path | str) -> dict[str, bool]:
+    path = Path(path)
+    statuses = default_remit_statuses()
+    if not path.exists():
+        save_remit_statuses(path, statuses)
+        return statuses
+
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        save_remit_statuses(path, statuses)
+        return statuses
+
+    if isinstance(data, dict):
+        raw_items = data.get("items", data)
+        if isinstance(raw_items, dict):
+            for key in REMIT_RATES:
+                value = raw_items.get(key)
+                if isinstance(value, bool):
+                    statuses[key] = value
+                elif isinstance(value, dict) and isinstance(value.get("enabled"), bool):
+                    statuses[key] = bool(value["enabled"])
+    return statuses
+
+
+def save_remit_statuses(path: Path | str, statuses: dict[str, bool]) -> None:
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    normalized = {key: bool(statuses.get(key, True)) for key in REMIT_RATES}
+    path.write_text(
+        json.dumps({"items": normalized}, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+
+
+def set_remit_item_enabled(path: Path | str, key: str, enabled: bool) -> dict[str, bool]:
+    if key not in REMIT_RATES:
+        raise ValueError(f"Unknown remit item `{key}`.")
+    statuses = load_remit_statuses(path)
+    statuses[key] = enabled
+    save_remit_statuses(path, statuses)
+    return statuses
+
+
+def set_all_remit_items_enabled(path: Path | str, enabled: bool) -> dict[str, bool]:
+    statuses = {key: enabled for key in REMIT_RATES}
+    save_remit_statuses(path, statuses)
+    return statuses
+
+
+def remit_catalog_items(statuses: dict[str, bool]) -> list[RemitCatalogItem]:
+    return [
+        RemitCatalogItem(
+            key=key,
+            display_name=remit_item(key).display_name,
+            unit_rate=rate,
+            enabled=bool(statuses.get(key, True)),
+        )
+        for key, rate in REMIT_RATES.items()
+    ]
 
 
 def _clean_count(value: str) -> str:

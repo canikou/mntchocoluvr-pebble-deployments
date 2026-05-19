@@ -37,7 +37,7 @@ from yt_assist.domain.proof import (
     materialize_imported_payment_proofs,
 )
 from yt_assist.domain.serialization import parse_datetime
-from yt_assist.domain.uwu import COMBO_COMMISSION_CENTS, COMBO_UNIT_PRICE
+from yt_assist.domain.uwu import COMBO_COMMISSION_CENTS, COMBO_ITEM_NAME, COMBO_UNIT_PRICE
 from yt_assist.storage.migrations import run_migrations
 
 LOGGER = logging.getLogger(__name__)
@@ -230,13 +230,21 @@ class Database:
                 ) AS creator_display_name,
                 SUM(r.total_sale) AS total_sales,
                 SUM(r.procurement_cost) AS procurement_cost,
-                COUNT(*) AS receipt_count
+                COUNT(*) AS receipt_count,
+                SUM(COALESCE(combo.combo_count, CAST(r.total_sale / ? AS INTEGER)) * ?) AS commission_cents
             FROM receipts r
+            LEFT JOIN (
+                SELECT receipt_id, SUM(quantity) AS combo_count
+                FROM receipt_items
+                WHERE item_name = ?
+                GROUP BY receipt_id
+            ) combo ON combo.receipt_id = r.id
             WHERE r.status IN ('active', 'paid')
             GROUP BY r.creator_user_id
             ORDER BY {order_by}
         """
-        async with self._connection.execute(query) as cursor:
+        params: tuple[Any, ...] = (COMBO_UNIT_PRICE, COMBO_COMMISSION_CENTS, COMBO_ITEM_NAME)
+        async with self._connection.execute(query, params) as cursor:
             rows = await cursor.fetchall()
         return [
             LeaderboardEntry(
@@ -245,6 +253,7 @@ class Database:
                 total_sales=int(row["total_sales"]),
                 procurement_cost=int(row["procurement_cost"]),
                 receipt_count=int(row["receipt_count"]),
+                commission_cents=int(row["commission_cents"] or 0),
             )
             for row in rows
         ]
@@ -259,13 +268,19 @@ class Database:
                     SUM(r.procurement_cost) AS reimbursement,
                     SUM(r.profit) AS profit,
                     COUNT(*) AS receipt_count,
-                    SUM(CAST(r.total_sale / ? AS INTEGER) * ?) AS total_payout_cents
+                    SUM(COALESCE(combo.combo_count, CAST(r.total_sale / ? AS INTEGER)) * ?) AS total_payout_cents
                 FROM receipts r
                 LEFT JOIN receipt_accounting accounting ON accounting.receipt_id = r.id
+                LEFT JOIN (
+                    SELECT receipt_id, SUM(quantity) AS combo_count
+                    FROM receipt_items
+                    WHERE item_name = ?
+                    GROUP BY receipt_id
+                ) combo ON combo.receipt_id = r.id
                 WHERE r.status = 'active'
                 GROUP BY COALESCE(accounting.recorded_for_user_id, r.creator_user_id)
             """
-            params: tuple[Any, ...] = (COMBO_UNIT_PRICE, COMBO_COMMISSION_CENTS)
+            params: tuple[Any, ...] = (COMBO_UNIT_PRICE, COMBO_COMMISSION_CENTS, COMBO_ITEM_NAME)
         else:
             query = """
                 SELECT
@@ -274,14 +289,20 @@ class Database:
                     SUM(r.procurement_cost) AS reimbursement,
                     SUM(r.profit) AS profit,
                     COUNT(*) AS receipt_count,
-                    SUM(CAST(r.total_sale / ? AS INTEGER) * ?) AS total_payout_cents
+                    SUM(COALESCE(combo.combo_count, CAST(r.total_sale / ? AS INTEGER)) * ?) AS total_payout_cents
                 FROM receipts r
                 LEFT JOIN receipt_accounting accounting ON accounting.receipt_id = r.id
+                LEFT JOIN (
+                    SELECT receipt_id, SUM(quantity) AS combo_count
+                    FROM receipt_items
+                    WHERE item_name = ?
+                    GROUP BY receipt_id
+                ) combo ON combo.receipt_id = r.id
                 WHERE r.status = 'active'
                   AND COALESCE(accounting.recorded_for_user_id, r.creator_user_id) = ?
                 GROUP BY COALESCE(accounting.recorded_for_user_id, r.creator_user_id)
             """
-            params = (COMBO_UNIT_PRICE, COMBO_COMMISSION_CENTS, creator_user_id)
+            params = (COMBO_UNIT_PRICE, COMBO_COMMISSION_CENTS, COMBO_ITEM_NAME, creator_user_id)
 
         async with self._connection.execute(query, params) as cursor:
             rows = await cursor.fetchall()
@@ -453,6 +474,11 @@ class Database:
             current.total_sales += receipt.total_sale
             current.procurement_cost += receipt.procurement_cost
             current.receipt_count += 1
+            combo_count = sum(item.quantity for item in receipt.items if item.item_name == COMBO_ITEM_NAME)
+            if combo_count > 0:
+                current.commission_cents += combo_count * COMBO_COMMISSION_CENTS
+            else:
+                current.commission_cents += (receipt.total_sale // COMBO_UNIT_PRICE) * COMBO_COMMISSION_CENTS
         entries = list(buckets.values())
         entries.sort(
             key=lambda entry: (
