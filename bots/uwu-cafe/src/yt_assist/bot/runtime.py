@@ -1046,7 +1046,7 @@ class BakunawaMechDiscordClient(discord.Client):
             invocation_message=message,
         )
         await self.apply_result(dispatch, result)
-        if result.canonical_name in {"payoutoffset", "payoutsplit", "weeklypayout"}:
+        if result.canonical_name in {"adjustbal", "payoutoffset", "payoutsplit", "weeklypayout"}:
             self._schedule_all_lifecycle_status_refreshes(delay_seconds=0.25)
 
     async def _announce_starting_up(self) -> None:
@@ -1677,7 +1677,15 @@ class BakunawaMechDiscordClient(discord.Client):
             )
             return
         try:
-            combo_count = parse_combo_quantity(remainder)
+            combo_count, target_user_id = _parse_log_prefix_args(remainder)
+        except ValueError as error:
+            await message.channel.send(
+                embeds=[embed_from_payload(task_error_embed("UWU Cafe Log", str(error)))]
+            )
+            return
+        target_user = await self._resolve_calc_target_user(message, target_user_id)
+        try:
+            credit_target = self._resolve_calc_credit_target(message.author, target_user_id, target_user)
         except ValueError as error:
             await message.channel.send(
                 embeds=[embed_from_payload(task_error_embed("UWU Cafe Log", str(error)))]
@@ -1704,6 +1712,7 @@ class BakunawaMechDiscordClient(discord.Client):
                 message=message,
                 receipt_id=receipt_id,
                 combo_count=combo_count,
+                credit_target=credit_target,
                 proof_paths=proof_paths,
                 proof_urls=proof_urls,
             )
@@ -1718,6 +1727,10 @@ class BakunawaMechDiscordClient(discord.Client):
                     "combo_count": combo_count,
                     "discount": combo_discount_amount(combo_count),
                     "commission_cents": combo_commission_cents(combo_count),
+                    "recorded_by_user_id": str(message.author.id),
+                    "recorded_by_display_name": getattr(message.author, "display_name", message.author.name),
+                    "recorded_for_user_id": credit_target.user_id,
+                    "recorded_for_display_name": credit_target.display_name,
                     "proof_message_id": message.id,
                     "proof_urls": proof_urls,
                 },
@@ -1738,7 +1751,8 @@ class BakunawaMechDiscordClient(discord.Client):
                         "UWU Cafe Log",
                         self._combo_log_confirmation(
                             receipt_id=receipt_id,
-                            user_id=message.author.id,
+                            actor_user_id=message.author.id,
+                            credited_user_id=int(credit_target.user_id),
                             combo_count=combo_count,
                         ),
                     )
@@ -1748,15 +1762,24 @@ class BakunawaMechDiscordClient(discord.Client):
         )
         self._schedule_all_lifecycle_status_refreshes(delay_seconds=0.25)
 
-    def _combo_log_confirmation(self, *, receipt_id: str, user_id: int, combo_count: int) -> str:
+    def _combo_log_confirmation(
+        self,
+        *,
+        receipt_id: str,
+        actor_user_id: int,
+        credited_user_id: int,
+        combo_count: int,
+    ) -> str:
         subtotal = combo_count * COMBO_UNIT_PRICE
         discount = combo_discount_amount(combo_count)
         total_sale = combo_sale_total(combo_count)
         lines = [
-            f"Saved `{receipt_id}` for <@{user_id}>.",
+            f"Saved `{receipt_id}` for <@{credited_user_id}>.",
             f"Combos: {combo_count:,}",
             f"Sales: ${total_sale:,}",
         ]
+        if credited_user_id != actor_user_id:
+            lines.append(f"Recorded by: <@{actor_user_id}>")
         if discount:
             lines.append(f"Bulk discount: -${discount:,} from ${subtotal:,}")
         lines.append(f"Commission: ${combo_commission_cents(combo_count) // 100:,}")
@@ -1893,6 +1916,7 @@ class BakunawaMechDiscordClient(discord.Client):
         message: discord.Message,
         receipt_id: str,
         combo_count: int,
+        credit_target: SessionCreditTarget,
         proof_paths: list[str],
         proof_urls: list[str],
     ) -> tuple[NewReceipt, ReceiptAccountingRecord]:
@@ -1910,9 +1934,9 @@ class BakunawaMechDiscordClient(discord.Client):
         )
         receipt = NewReceipt(
             id=receipt_id,
-            creator_user_id=str(message.author.id),
-            creator_username=message.author.name,
-            creator_display_name=getattr(message.author, "display_name", message.author.name),
+            creator_user_id=credit_target.user_id,
+            creator_username=credit_target.username,
+            creator_display_name=credit_target.display_name,
             guild_id=str(message.guild.id) if message.guild is not None else None,
             channel_id=str(message.channel.id),
             total_sale=total_sale,
@@ -1929,8 +1953,8 @@ class BakunawaMechDiscordClient(discord.Client):
             policy=AccountingPolicy.LEGACY_REIMBURSEMENT,
             recorded_by_user_id=str(message.author.id),
             recorded_by_display_name=getattr(message.author, "display_name", message.author.name),
-            recorded_for_user_id=str(message.author.id),
-            recorded_for_display_name=getattr(message.author, "display_name", message.author.name),
+            recorded_for_user_id=credit_target.user_id,
+            recorded_for_display_name=credit_target.display_name,
             created_at=finalized_at,
             updated_at=finalized_at,
         )
@@ -5242,7 +5266,16 @@ class BakunawaMechDiscordClient(discord.Client):
             if receipt.status.counts_for_payouts()
             and _reset_scope_matches(scope.mode, scope.user_ids, receipt.creator_user_id)
         ]
-        if not affected_receipts:
+        open_adjustment_user_ids = await self.base_runtime.database.list_open_payout_adjustment_user_ids()
+        adjustment_user_ids = _reset_adjustment_target_user_ids(
+            scope.mode,
+            scope.user_ids,
+            open_adjustment_user_ids,
+        )
+        has_matching_adjustments = bool(
+            open_adjustment_user_ids if adjustment_user_ids is None else adjustment_user_ids
+        )
+        if not affected_receipts and not has_matching_adjustments:
             await interaction.edit_original_response(
                 content=_reset_empty_result_message(action, scope.mode, scope.user_ids),
                 embeds=[],
@@ -5269,29 +5302,29 @@ class BakunawaMechDiscordClient(discord.Client):
                 )
             ],
         )
-        summary = render_stats_description(_leaderboard_from_receipts(affected_receipts))
+        summary = (
+            render_stats_description(_leaderboard_from_receipts(affected_receipts))
+            if affected_receipts
+            else "No active receipts matched; only payout adjustments were settled."
+        )
         receipt_ids = [receipt.id for receipt in affected_receipts]
         path = await save_export_async(
             filtered_bundle,
             self.base_runtime.config.storage.export_dir,
             _reset_export_label(scope.mode, action),
         )
-        updated = await self.base_runtime.database.update_receipt_statuses(
-            receipt_ids,
-            action.target_status(),
-            ReceiptStatus.ACTIVE,
-            str(interaction.user.id),
-            getattr(interaction.user, "display_name", interaction.user.name),
-            None,
-        )
-        open_adjustment_user_ids = await self.base_runtime.database.list_open_payout_adjustment_user_ids()
-        adjustment_user_ids = _reset_adjustment_target_user_ids(
-            scope.mode,
-            scope.user_ids,
-            open_adjustment_user_ids,
-        )
+        updated = 0
+        if receipt_ids:
+            updated = await self.base_runtime.database.update_receipt_statuses(
+                receipt_ids,
+                action.target_status(),
+                ReceiptStatus.ACTIVE,
+                str(interaction.user.id),
+                getattr(interaction.user, "display_name", interaction.user.name),
+                None,
+            )
         settled_adjustments = await self.base_runtime.database.settle_payout_adjustments(
-            adjustment_user_ids if adjustment_user_ids is not None else None,
+            adjustment_user_ids if has_matching_adjustments else [],
             str(interaction.user.id),
             getattr(interaction.user, "display_name", interaction.user.name),
             f"reset_{action.target_status().as_str()}",
@@ -6524,7 +6557,7 @@ class BakunawaMechDiscordClient(discord.Client):
             interaction=interaction,
         )
         await self.apply_result(dispatch, result)
-        if result.canonical_name in {"payoutoffset", "payoutsplit", "weeklypayout"}:
+        if result.canonical_name in {"adjustbal", "payoutoffset", "payoutsplit", "weeklypayout"}:
             self._schedule_all_lifecycle_status_refreshes(delay_seconds=0.25)
 
 
@@ -7480,6 +7513,19 @@ def _parse_reset_target_user_ids(scope: str | None) -> list[int]:
     return user_ids
 
 
+def _parse_log_prefix_args(scope: str | None) -> tuple[int, int | None]:
+    parts = (scope or "").split()
+    if len(parts) > 2:
+        raise ValueError("Use `u!log <combo_count> [@user/user_id]` with a proof image.")
+    combo_count = parse_combo_quantity(parts[0] if parts else None)
+    if len(parts) == 1:
+        return combo_count, None
+    target_user_id = parse_user_token(parts[1])
+    if target_user_id is None:
+        raise ValueError("The optional log credit target must be a user mention or numeric user ID.")
+    return combo_count, target_user_id
+
+
 def _reset_scope_subject(mode: ResetMode, user_ids: list[int]) -> str:
     if mode is ResetMode.ALL:
         return "everyone"
@@ -7495,7 +7541,7 @@ def _reset_scope_subject(mode: ResetMode, user_ids: list[int]) -> str:
 def _reset_warning_message(mode: ResetMode, user_ids: list[int]) -> str:
     return (
         f"Are you sure you want to reset {_reset_scope_subject(mode, user_ids)}?\n"
-        "Only active receipts are affected, and a backup export will be saved before any status changes."
+        "Active receipts and open payout adjustments for that scope are affected, and a backup export will be saved before any status changes."
     )
 
 
@@ -7563,8 +7609,8 @@ def _reset_scope_action(mode: ResetMode, user_ids: list[int], action: ResetActio
 
 def _reset_empty_result_message(action: ResetAction, mode: ResetMode, user_ids: list[int]) -> str:
     return (
-        f"No active receipts matched {_reset_scope_subject(mode, user_ids)}.\n"
-        f"Nothing was {action.empty_result_verb()}."
+        f"No active receipts or open payout adjustments matched {_reset_scope_subject(mode, user_ids)}.\n"
+        f"No logs were {action.empty_result_verb()} and no adjustments were settled."
     )
 
 

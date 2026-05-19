@@ -123,6 +123,7 @@ PREFIX_COMMAND_ALIASES: dict[str, str] = {
     "stats": "stats",
     "pricesheet": "pricesheet",
     "payouts": "payouts",
+    "adjustbal": "adjustbal",
     "payoutoffset": "payoutoffset",
     "payoutsplit": "payoutsplit",
     "weeklypayout": "weeklypayout",
@@ -330,15 +331,49 @@ async def _handle_payouts(ctx: CommandContext, args: list[str]) -> CommandResult
 
 
 async def _handle_payoutoffset(ctx: CommandContext, args: list[str]) -> CommandResult:
+    return await _handle_payout_adjustment(
+        ctx,
+        args,
+        canonical_name="payoutoffset",
+        title="UWU Cafe Payout Offset",
+        usage=f"Use `{ctx.prefix}payoutoffset @user <amount> [reason]`.",
+        default_reason="Manual payout adjustment",
+    )
+
+
+async def _handle_adjustbal(ctx: CommandContext, args: list[str]) -> CommandResult:
+    return await _handle_payout_adjustment(
+        ctx,
+        args,
+        canonical_name="adjustbal",
+        title="UWU Cafe Balance Adjustment",
+        usage=f"Use `{ctx.prefix}adjustbal @user <amount>`.",
+        default_reason="Manual balance adjustment",
+    )
+
+
+async def _handle_payout_adjustment(
+    ctx: CommandContext,
+    args: list[str],
+    *,
+    canonical_name: str,
+    title: str,
+    usage: str,
+    default_reason: str,
+) -> CommandResult:
     await _ensure_admin(ctx)
     await _ensure_admin_channel(ctx)
     try:
-        user_id, amount_cents, reason = _parse_payout_offset_args(args)
+        user_id, amount_cents, reason = _parse_payout_offset_args(
+            args,
+            usage=usage,
+            default_reason=default_reason,
+        )
     except ValueError as error:
         raise _handled(
             CommandResult(
-                canonical_name="payoutoffset",
-                events=[_send(_error_reply(ctx, "UWU Cafe Payout Offset", str(error)))],
+                canonical_name=canonical_name,
+                events=[_send(_error_reply(ctx, title, str(error)))],
             )
         ) from error
     existing_entries = await ctx.runtime.database.payouts(user_id)
@@ -360,12 +395,12 @@ async def _handle_payoutoffset(ctx: CommandContext, args: list[str]) -> CommandR
     events.append(
         _send(
             ReplyPayload(
-                embeds=[task_status_embed("UWU Cafe Payout Offset", description)],
+                embeds=[task_status_embed(title, description)],
                 ephemeral=ctx.is_interaction,
             )
         )
     )
-    return CommandResult(canonical_name="payoutoffset", events=events)
+    return CommandResult(canonical_name=canonical_name, events=events)
 
 
 async def _handle_payoutsplit(ctx: CommandContext, args: list[str]) -> CommandResult:
@@ -980,6 +1015,7 @@ COMMAND_HANDLERS: dict[str, CommandHandler] = {
     "stats": _handle_stats,
     "pricesheet": _handle_pricesheet,
     "payouts": _handle_payouts,
+    "adjustbal": _handle_adjustbal,
     "payoutoffset": _handle_payoutoffset,
     "payoutsplit": _handle_payoutsplit,
     "weeklypayout": _handle_weeklypayout,
@@ -989,14 +1025,19 @@ COMMAND_HANDLERS: dict[str, CommandHandler] = {
 }
 
 
-def _parse_payout_offset_args(args: list[str]) -> tuple[str, int, str]:
+def _parse_payout_offset_args(
+    args: list[str],
+    *,
+    usage: str,
+    default_reason: str,
+) -> tuple[str, int, str]:
     if len(args) < 2:
-        raise ValueError("Use `u!payoutoffset @user <amount> [reason]`.")
+        raise ValueError(usage)
     parsed_user_id = parse_user_token(args[0])
     if parsed_user_id is None:
         raise ValueError("The first argument must be a user mention or numeric user ID.")
     amount_cents = parse_signed_amount_cents_text(args[1])
-    reason = " ".join(args[2:]).strip() or "Manual payout adjustment"
+    reason = " ".join(args[2:]).strip() or default_reason
     return str(parsed_user_id), amount_cents, reason
 
 

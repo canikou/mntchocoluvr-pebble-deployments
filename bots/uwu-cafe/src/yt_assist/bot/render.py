@@ -238,6 +238,7 @@ def lifecycle_status_embed(state: str, description: str, *, channel_role: str = 
         field_value = (
             "`u!manage` - open log manager\n"
             "`u!manageremit` - manage remit item availability\n"
+            "`u!adjustbal` - add or deduct payout balance\n"
             "`u!payouts` - view payout totals\n"
             "`u!reset` - close out active logs\n"
             "`u!export` - export a backup"
@@ -449,6 +450,7 @@ def help_page_embed(prefix: str, page: int) -> EmbedPayload:
             (
                 f"`{prefix}manage` / `/mechmanage` - Open the log manager\n"
                 f"`{prefix}manageremit` - Manage remit item availability\n"
+                f"`{prefix}adjustbal @user <amount>` - Add or deduct from a user's payout balance\n"
                 f"`{prefix}payouts` / `/mechpayouts` - Show staff payout totals\n"
                 f"`{prefix}payoutoffset` / `/mechpayoutoffset` - Add a payout-time credit or deduction\n"
                 f"`{prefix}payoutsplit` / `/mechpayoutsplit` - Split one user's payout across other staff\n"
@@ -496,7 +498,7 @@ def help_page_embed(prefix: str, page: int) -> EmbedPayload:
             False,
         ).field(
             "Permissions",
-            "Everyone: `log`, `remit`, `stats`, `note`, `help`, `health`\nAdmins only: `manage`, `manageremit`, `payouts`, `payoutoffset`, `payoutsplit`, `refresh`, `templates`, `reset`, `export`, `import`, `fixpreviews`, `clean`, `restartbot`, `stop`",
+            "Everyone: `log`, `remit`, `stats`, `note`, `help`, `health`\nAdmins only: `manage`, `manageremit`, `adjustbal`, `payouts`, `payoutoffset`, `payoutsplit`, `refresh`, `templates`, `reset`, `export`, `import`, `fixpreviews`, `clean`, `restartbot`, `stop`",
             False,
         )
     return embed.with_footer(f"Page {page + 1}/{HELP_PAGE_COUNT} - Use Prev/Next to browse.")
