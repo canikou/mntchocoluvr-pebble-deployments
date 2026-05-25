@@ -40,8 +40,8 @@ REMIT_ALIASES: dict[str, str] = {
     "cooking_oil": "cooking_oil",
     "oil": "cooking_oil",
     "glass": "glass",
-    "raw_meat": "raw_meat";
-    "rawmeat": "raw_meat";
+    "raw_meat": "raw_meat",
+    "rawmeat": "raw_meat",
 }
 
 
