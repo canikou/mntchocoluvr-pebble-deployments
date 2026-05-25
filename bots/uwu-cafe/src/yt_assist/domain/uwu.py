@@ -20,6 +20,7 @@ REMIT_RATES: dict[str, int] = {
     "spatula": 2_000,
     "cooking_oil": 200,
     "glass": 80,
+    "raw_meat": 150,
 }
 
 REMIT_ALIASES: dict[str, str] = {
@@ -39,6 +40,8 @@ REMIT_ALIASES: dict[str, str] = {
     "cooking_oil": "cooking_oil",
     "oil": "cooking_oil",
     "glass": "glass",
+    "raw_meat": "raw_meat";
+    "rawmeat": "raw_meat";
 }
 
 

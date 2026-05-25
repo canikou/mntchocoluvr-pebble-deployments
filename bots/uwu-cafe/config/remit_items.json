@@ -6,6 +6,7 @@
     "wheat": true,
     "spatula": true,
     "cooking_oil": true,
-    "glass": true
+    "glass": true,
+	  "raw_meat": true,
   }
 }
