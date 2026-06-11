@@ -3,7 +3,8 @@ PebbleHost upload package for YOUTOOL1-highgrounds, MECH1-highgrounds, and UWU1-
 This folder is prepared to match PebbleHost's Python bot layout:
 - requirements.txt at the root
 - bot.py as the required start file
-- bot-manager.cfg as the multi-bot registry and enabled/disabled toggle file
+- bot-manager.cfg as the tracked default multi-bot registry
+- optional bot-manager.local.cfg as the live enabled/disabled override file
 
 Recommended upload/use:
 1. Open PebbleHost File Manager for the bot.
@@ -21,8 +22,9 @@ The root bot.py starts every enabled bot in bot-manager.cfg as a separate Python
 - mech1 runs from Bots/mech1-highgrounds.
 - uwu1 runs from Bots/uwu1-tondonights.
 
-To quickly disable a bot, edit bot-manager.cfg and set its section to enabled = false.
-Leave the section registered so it can be re-enabled later without changing launcher code.
+To quickly disable a bot in Git, edit bot-manager.cfg and set its section to enabled = false.
+To make live PebbleHost toggles survive Git refreshes, copy bot-manager.cfg to bot-manager.local.cfg on the host and edit bot-manager.local.cfg instead.
+Leave sections registered so bots can be re-enabled later without changing launcher code.
 
 Each bot keeps its own config, data, logs, exports, imports, database, stop file, and Discord token.
 Do not reuse the same token in multiple config files.

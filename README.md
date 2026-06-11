@@ -12,7 +12,8 @@ Its job is simple:
 ## Runtime Layout
 
 - `bot.py` is the only PebbleHost start file. It is a multi-bot manager, not an individual bot.
-- `bot-manager.cfg` is the bot registry. Change `enabled = true` or `enabled = false` to start or skip a registered bot.
+- `bot-manager.cfg` is the tracked default bot registry.
+- `bot-manager.local.cfg` is the ignored runtime override. On PebbleHost, copy `bot-manager.cfg` to `bot-manager.local.cfg` and edit that file if you want toggles to survive Git refreshes.
 - `Bots/youtool1-highgrounds/` runs internal bot `youtool1`.
 - `Bots/mech1-highgrounds/` runs internal bot `mech1`.
 - `Bots/uwu1-tondonights/` runs internal bot `uwu1`.
@@ -33,7 +34,7 @@ Root-level files are deployment management files only: `bot.py`, `bot-manager.cf
 
 ## Bot Manager Config
 
-Edit `bot-manager.cfg` to toggle bots:
+Edit `bot-manager.cfg` to change the Git-tracked default. Edit `bot-manager.local.cfg` on PebbleHost to change live toggles without having Git reset them on restart.
 
 ```ini
 [bot:youtool1]
@@ -82,9 +83,10 @@ Do not include:
 2. Promote stable changes into that private repo's stable branch.
 3. Mirror only deployment-safe files into this repo under the matching `Bots/<bot>/` folder.
 4. Update `bot-manager.cfg` if a bot is added, removed, renamed, or toggled.
-5. Run `python bot.py --check`.
-6. Push this repo's `main` branch.
-7. Restart the PebbleHost bot so Git Management pulls the latest deployment snapshot.
+5. If the remote host needs different enabled/disabled toggles than Git, update its ignored `bot-manager.local.cfg`.
+6. Run `python bot.py --check`.
+7. Push this repo's `main` branch.
+8. Restart the PebbleHost bot so Git Management pulls the latest deployment snapshot.
 
 ## PebbleHost Settings
 

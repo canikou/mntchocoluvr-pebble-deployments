@@ -11,7 +11,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parent
-CONFIG_PATH = ROOT / "bot-manager.cfg"
+DEFAULT_CONFIG_PATH = ROOT / "bot-manager.cfg"
+LOCAL_CONFIG_PATH = ROOT / "bot-manager.local.cfg"
 SECTION_PREFIX = "bot:"
 GRACEFUL_STOP_SECONDS = 30
 FORCED_STOP_SECONDS = 10
@@ -45,7 +46,12 @@ def resolve_from_bot_root(value: str, bot_root: Path) -> Path:
     return path if path.is_absolute() else bot_root / path
 
 
-def load_bot_specs(config_path: Path = CONFIG_PATH) -> tuple[BotSpec, ...]:
+def select_config_path() -> Path:
+    return LOCAL_CONFIG_PATH if LOCAL_CONFIG_PATH.exists() else DEFAULT_CONFIG_PATH
+
+
+def load_bot_specs(config_path: Path | None = None) -> tuple[BotSpec, ...]:
+    config_path = config_path or select_config_path()
     if not config_path.exists():
         raise FileNotFoundError(f"Bot manager config is missing: {config_path}")
 
@@ -177,11 +183,12 @@ def terminate_remaining(processes: dict[BotSpec, subprocess.Popen[bytes]], reaso
 
 
 def check_layout() -> int:
-    print(f"Bot manager config: {CONFIG_PATH}", flush=True)
-    for spec in load_bot_specs():
+    config_path = select_config_path()
+    print(f"Bot manager config: {config_path}", flush=True)
+    for spec in load_bot_specs(config_path):
         ensure_layout(spec)
-        config_path = spec.root / "config" / "app.toml"
-        config_status = "present" if config_path.exists() else "missing runtime config"
+        runtime_config_path = spec.root / "config" / "app.toml"
+        config_status = "present" if runtime_config_path.exists() else "missing runtime config"
         enabled_status = "enabled" if spec.enabled else "disabled"
         print(f"{spec.name}: {spec.root} ({enabled_status}, {config_status})", flush=True)
     return 0
@@ -190,10 +197,11 @@ def check_layout() -> int:
 def run() -> int:
     global active_specs
 
-    specs = load_bot_specs()
+    config_path = select_config_path()
+    specs = load_bot_specs(config_path)
     enabled_specs = tuple(spec for spec in specs if spec.enabled)
     if not enabled_specs:
-        print(f"No bots are enabled in {CONFIG_PATH}.", flush=True)
+        print(f"No bots are enabled in {config_path}.", flush=True)
         return 1
     active_specs = enabled_specs
 
