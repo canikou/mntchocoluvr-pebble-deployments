@@ -1,6 +1,6 @@
-# YouTool + Bakunawa Mech + UWU Cafe Pebble Deployment
+﻿# mntchocoluvr Pebble Deployments
 
-This repository is the public PebbleHost deployment mirror for the Discord bots that run on the
+This repository is the PebbleHost-facing deployment mirror for the Discord bots that run on the
 same PebbleHost instance.
 
 Its job is simple:
@@ -11,19 +11,19 @@ Its job is simple:
 
 ## Relationship To The Other Repos
 
-- YouTool private source repo: `master` is the stable source-of-truth branch
-- YouTool private working branch: `develop` is for in-progress changes before they are promoted to `master`
+- `YOUTOOL1-highgrounds` private source repo: `master` is the stable source-of-truth branch
+- `YOUTOOL1-highgrounds` private working branch: `develop` is for in-progress changes before they are promoted to `master`
 - legacy reference branch: `legacy-rust` preserves the outdated original Rust implementation
-- Bakunawa Mech source is mirrored into `bots/bakunawa/`
-- UWU Cafe source is mirrored into `bots/uwu-cafe/`
+- `MECH1-highgrounds` source is mirrored into `bots/bakunawa/`
+- `UWU1-tondonights` source is mirrored into `bots/uwu-cafe/`
 - this repo: `main` is the deployment branch the remote PebbleHost bot pulls on restart
 
 ## Runtime Layout
 
 - `bot.py` is the PebbleHost start file and multi-bot launcher.
-- The root repository directory runs YouTool.
-- `bots/bakunawa/` runs Bakunawa Mech.
-- `bots/uwu-cafe/` runs UWU Cafe.
+- The root repository directory runs `YOUTOOL1-highgrounds`.
+- `bots/bakunawa/` runs `MECH1-highgrounds`.
+- `bots/uwu-cafe/` runs `UWU1-tondonights`.
 - Each bot has its own `config/`, `data/`, `logs/`, `exports/`, and `import/` directory.
 - Each bot must use a different Discord token.
 
@@ -70,4 +70,4 @@ Do not include:
 - Keep the Git branch set to `main`.
 - Store live tokens only in PebbleHost runtime config files or environment variables.
 - If using config files, create `config/app.toml`, `bots/bakunawa/config/app.toml`, and `bots/uwu-cafe/config/app.toml` from their `.example` files.
-- If using environment variables, set `YT_ASSIST_DISCORD_TOKEN` for YouTool, `BAKUNAWA_MECH_DISCORD_TOKEN` for Bakunawa Mech, and `UWU_CAFE_DISCORD_TOKEN` for UWU Cafe.
+- If using environment variables, set `YT_ASSIST_DISCORD_TOKEN` for YOUTOOL1-highgrounds, `BAKUNAWA_MECH_DISCORD_TOKEN` for MECH1-highgrounds, and `UWU_CAFE_DISCORD_TOKEN` for UWU1-tondonights.
