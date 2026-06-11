@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import configparser
 import os
 import signal
 import subprocess
@@ -10,40 +11,78 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parent
+CONFIG_PATH = ROOT / "bot-manager.cfg"
+SECTION_PREFIX = "bot:"
 GRACEFUL_STOP_SECONDS = 30
 FORCED_STOP_SECONDS = 10
 
 
 @dataclass(frozen=True)
 class BotSpec:
+    key: str
     name: str
     root: Path
     stop_file: Path
+    module: str
+    enabled: bool
 
     @property
     def src_dir(self) -> Path:
         return self.root / "src"
 
 
-BOTS = (
-    BotSpec(
-        name="YouTool",
-        root=ROOT,
-        stop_file=ROOT / "data" / "yt-assist.stop",
-    ),
-    BotSpec(
-        name="Bakunawa Mech",
-        root=ROOT / "bots" / "bakunawa",
-        stop_file=ROOT / "bots" / "bakunawa" / "data" / "bakunawa-mech.stop",
-    ),
-    BotSpec(
-        name="UWU Cafe",
-        root=ROOT / "bots" / "uwu-cafe",
-        stop_file=ROOT / "bots" / "uwu-cafe" / "data" / "uwu-cafe.stop",
-    ),
-)
-
 shutdown_signal: str | None = None
+active_specs: tuple[BotSpec, ...] = ()
+
+
+def resolve_from_root(value: str) -> Path:
+    path = Path(value)
+    return path if path.is_absolute() else ROOT / path
+
+
+def resolve_from_bot_root(value: str, bot_root: Path) -> Path:
+    path = Path(value)
+    return path if path.is_absolute() else bot_root / path
+
+
+def load_bot_specs(config_path: Path = CONFIG_PATH) -> tuple[BotSpec, ...]:
+    if not config_path.exists():
+        raise FileNotFoundError(f"Bot manager config is missing: {config_path}")
+
+    parser = configparser.ConfigParser()
+    parser.read(config_path, encoding="utf-8")
+
+    specs: list[BotSpec] = []
+    for section in parser.sections():
+        if not section.startswith(SECTION_PREFIX):
+            continue
+
+        key = section.removeprefix(SECTION_PREFIX).strip()
+        if not key:
+            raise ValueError(f"Invalid empty bot section in {config_path}")
+
+        path_value = parser.get(section, "path", fallback="").strip()
+        if not path_value:
+            raise ValueError(f"{section} must define path")
+
+        root = resolve_from_root(path_value)
+        specs.append(
+            BotSpec(
+                key=key,
+                name=parser.get(section, "name", fallback=key).strip() or key,
+                root=root,
+                stop_file=resolve_from_bot_root(
+                    parser.get(section, "stop_file", fallback="data/bot.stop").strip(),
+                    root,
+                ),
+                module=parser.get(section, "module", fallback="yt_assist").strip() or "yt_assist",
+                enabled=parser.getboolean(section, "enabled", fallback=True),
+            )
+        )
+
+    if not specs:
+        raise ValueError(f"No bot sections were found in {config_path}")
+    return tuple(specs)
 
 
 def build_child_env(spec: BotSpec) -> dict[str, str]:
@@ -76,7 +115,7 @@ def start_bot(spec: BotSpec) -> subprocess.Popen[bytes]:
 
     print(f"Starting {spec.name} from {spec.root}", flush=True)
     return subprocess.Popen(
-        [sys.executable, "-u", "-m", "yt_assist"],
+        [sys.executable, "-u", "-m", spec.module],
         cwd=spec.root,
         env=build_child_env(spec),
     )
@@ -98,7 +137,7 @@ def request_shutdown(reason: str) -> None:
     if shutdown_signal is None:
         shutdown_signal = reason
         print(f"PebbleHost requested shutdown via {reason}. Stopping all bots...", flush=True)
-    for spec in BOTS:
+    for spec in active_specs:
         write_stop_file(spec, reason)
 
 
@@ -138,21 +177,34 @@ def terminate_remaining(processes: dict[BotSpec, subprocess.Popen[bytes]], reaso
 
 
 def check_layout() -> int:
-    for spec in BOTS:
+    print(f"Bot manager config: {CONFIG_PATH}", flush=True)
+    for spec in load_bot_specs():
         ensure_layout(spec)
         config_path = spec.root / "config" / "app.toml"
         config_status = "present" if config_path.exists() else "missing runtime config"
-        print(f"{spec.name}: {spec.root} ({config_status})", flush=True)
+        enabled_status = "enabled" if spec.enabled else "disabled"
+        print(f"{spec.name}: {spec.root} ({enabled_status}, {config_status})", flush=True)
     return 0
 
 
 def run() -> int:
+    global active_specs
+
+    specs = load_bot_specs()
+    enabled_specs = tuple(spec for spec in specs if spec.enabled)
+    if not enabled_specs:
+        print(f"No bots are enabled in {CONFIG_PATH}.", flush=True)
+        return 1
+    active_specs = enabled_specs
+
     for handled_signal in (signal.SIGINT, signal.SIGTERM):
         signal.signal(handled_signal, handle_signal)
 
-    processes = {spec: start_bot(spec) for spec in BOTS}
-
+    processes: dict[BotSpec, subprocess.Popen[bytes]] = {}
     try:
+        for spec in enabled_specs:
+            processes[spec] = start_bot(spec)
+
         while True:
             if shutdown_signal is not None:
                 terminate_remaining(processes, shutdown_signal)
@@ -170,7 +222,8 @@ def run() -> int:
 
             time.sleep(1)
     finally:
-        terminate_remaining(processes, "launcher exit")
+        if processes:
+            terminate_remaining(processes, "launcher exit")
 
 
 if __name__ == "__main__":

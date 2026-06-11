@@ -7,6 +7,11 @@ exports/
 import/
 
 config/app.toml
+Bots/*/config/app.toml
+Bots/*/data/
+Bots/*/logs/
+Bots/*/exports/
+Bots/*/import/
 bots/*/config/app.toml
 bots/*/data/
 bots/*/logs/

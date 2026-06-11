@@ -1,9 +1,9 @@
-﻿PebbleHost upload package for YOUTOOL1-highgrounds, MECH1-highgrounds, and UWU1-tondonights.
+PebbleHost upload package for YOUTOOL1-highgrounds, MECH1-highgrounds, and UWU1-tondonights.
 
 This folder is prepared to match PebbleHost's Python bot layout:
 - requirements.txt at the root
-- bot.py as the start file and multi-bot launcher
-- pebble-python-config.json pinned to Python 3.12
+- bot.py as the required start file
+- bot-manager.cfg as the multi-bot registry and enabled/disabled toggle file
 
 Recommended upload/use:
 1. Open PebbleHost File Manager for the bot.
@@ -11,18 +11,21 @@ Recommended upload/use:
 3. Upload the contents of this folder, or upload the zip made from this folder.
 4. In PebbleHost Loader, set Bot Start File to bot.py.
 5. Add all runtime config files on PebbleHost:
-   - config/app.toml for YOUTOOL1-highgrounds
-   - bots/bakunawa/config/app.toml for MECH1-highgrounds
-   - bots/uwu-cafe/config/app.toml for UWU1-tondonights
+   - Bots/youtool1-highgrounds/config/app.toml for youtool1
+   - Bots/mech1-highgrounds/config/app.toml for mech1
+   - Bots/uwu1-tondonights/config/app.toml for uwu1
 6. Start the bot and watch Console/Chat for startup logs.
 
-The root bot.py starts all bots as separate Python processes:
-- YOUTOOL1-highgrounds runs from the repository root.
-- MECH1-highgrounds runs from bots/bakunawa.
-- UWU1-tondonights runs from bots/uwu-cafe.
+The root bot.py starts every enabled bot in bot-manager.cfg as a separate Python process:
+- youtool1 runs from Bots/youtool1-highgrounds.
+- mech1 runs from Bots/mech1-highgrounds.
+- uwu1 runs from Bots/uwu1-tondonights.
 
-Each bot keeps its own config, data, logs, exports, imports, database, stop file, and
-Discord token. Do not reuse the same token in multiple config files.
+To quickly disable a bot, edit bot-manager.cfg and set its section to enabled = false.
+Leave the section registered so it can be re-enabled later without changing launcher code.
+
+Each bot keeps its own config, data, logs, exports, imports, database, stop file, and Discord token.
+Do not reuse the same token in multiple config files.
 
 If you prefer environment variables instead of writing tokens into app.toml, use:
 - YT_ASSIST_DISCORD_TOKEN for YOUTOOL1-highgrounds
@@ -30,21 +33,19 @@ If you prefer environment variables instead of writing tokens into app.toml, use
 - UWU_CAFE_DISCORD_TOKEN for UWU1-tondonights
 
 Included runtime data:
-- config/ with safe shared content files and app.toml.example
-- bots/bakunawa/config/ with MECH1-highgrounds content files and app.toml.example
-- bots/uwu-cafe/config/ with UWU1-tondonights content files and app.toml.example
+- bot-manager.cfg
+- Bots/youtool1-highgrounds/config/ with youtool1 content files and app.toml.example
+- Bots/mech1-highgrounds/config/ with mech1 content files and app.toml.example
+- Bots/uwu1-tondonights/config/ with uwu1 content files and app.toml.example
 
 Intentionally omitted:
-- config/app.toml
-- bots/bakunawa/config/app.toml
-- bots/uwu-cafe/config/app.toml
-- data/
-- bots/bakunawa/data/
-- bots/uwu-cafe/data/
-- logs/
-- exports/
-- import/
+- Bots/youtool1-highgrounds/config/app.toml
+- Bots/mech1-highgrounds/config/app.toml
+- Bots/uwu1-tondonights/config/app.toml
+- Bots/*/data/
+- Bots/*/logs/
+- Bots/*/exports/
+- Bots/*/import/
 - private tokens, credentials, and live databases
 
-The launcher creates data/, logs/, exports/, and import/ directories for each bot when
-it starts.
+The launcher creates data/, logs/, exports/, and import/ directories inside each enabled bot folder when it starts.

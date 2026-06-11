@@ -14,5 +14,5 @@ if ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
   fi
 fi
 
-echo "Starting managed YouTool + Bakunawa Mech launcher..."
+echo "Starting PebbleHost multi-bot manager..."
 exec "$PYTHON_BIN" -u bot.py
