@@ -6,13 +6,13 @@ This repository is the private development source for Bakunawa Mech Bot.
 
 The live watched deployment repository is:
 
-- Local path: `this repository root`
+- Local path: this deployment repository root
 - GitHub: `canikou/youtool-pebble-deployment`
 - Deployment subdirectory: `bots/bakunawa/`
 
 When the user asks to work on "Bakunawa Mech Bot", make code changes here first:
 
-- Local path: `sibling folder ..\\bakunawa-mech-bot`
+- Local path: `..\..\bakunawa-mech-bot` from the deployment repo root
 - GitHub: `canikou/bakunawa-mech-bot`
 
 After changes are tested and ready for deployment, mirror deployment-safe files into the watched deployment repo:
@@ -24,7 +24,7 @@ powershell -ExecutionPolicy Bypass -File scripts\mirror-to-deployment.ps1
 Then commit and push both repositories when appropriate:
 
 1. Commit and push this private source repo.
-2. Review `this repository root` status.
+2. Review this deployment repository status.
 3. Commit and push `youtool-pebble-deployment` `main` so the remote host can pick up the update.
 
 Never commit live secrets or runtime data:
@@ -42,7 +42,7 @@ Never commit live secrets or runtime data:
 Use Python 3.12.
 
 ```powershell
-py -3.12 -m venv .venv
+uv venv --python 3.13
 uv pip install -r requirements.txt
 ```
 
