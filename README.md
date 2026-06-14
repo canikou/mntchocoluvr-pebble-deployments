@@ -17,6 +17,7 @@ Its job is simple:
 - `Bots/youtool1-highgrounds/` runs internal bot `youtool1`.
 - `Bots/mech1-highgrounds/` runs internal bot `mech1`.
 - `Bots/uwu1-tondonights/` runs internal bot `uwu1`.
+- `Bots/famd5-5th/` runs internal bot `famd5`.
 - Each bot keeps its own `config/`, `data/`, `logs/`, `exports/`, and `import/` directory.
 - Each bot must use a different Discord token.
 
@@ -29,6 +30,7 @@ Root-level files are deployment management files only: `bot.py`, `bot-manager.cf
 - `YOUTOOL1-highgrounds` source is mirrored into `Bots/youtool1-highgrounds/`.
 - `MECH1-highgrounds` source is mirrored into `Bots/mech1-highgrounds/`.
 - `UWU1-tondonights` source is mirrored into `Bots/uwu1-tondonights/`.
+- `FAMD-5th` source is mirrored into `Bots/famd5-5th/`.
 - This repo: `main` is the deployment branch the remote PebbleHost bot pulls on restart.
 - Legacy reference branch: `legacy-rust` preserves the outdated original Rust implementation.
 
@@ -95,3 +97,4 @@ Do not include:
 - Store live tokens only in PebbleHost runtime config files or environment variables.
 - If using config files, create each bot's `config/app.toml` from its `config/app.toml.example`.
 - If using environment variables, set `YT_ASSIST_DISCORD_TOKEN` for `YOUTOOL1-highgrounds`, `BAKUNAWA_MECH_DISCORD_TOKEN` for `MECH1-highgrounds`, and `UWU_CAFE_DISCORD_TOKEN` for `UWU1-tondonights`.
+- For FAMD, set `FAMD_DISCORD_TOKEN` or create `Bots/famd5-5th/config/app.toml` from the example.

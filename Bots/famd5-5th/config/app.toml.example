@@ -1,0 +1,43 @@
+[discord]
+# Bot Settings
+token = "PUT_YOUR_BOT_TOKEN_HERE"
+# Commands use !command by default. Set prefix = "FAMD" to require FAMD!command.
+prefix = ""
+message_content_intent = true
+test_guild_id = 0
+initial_admin_user_ids = [431747118609334272]
+admin_manager_user_ids = [431747118609334272]
+status_text = "handling FAMD shifts"
+
+# Channel IDs
+clock_in_out_channel_id = 0
+logging_main_channel_id = 0
+admin_logs_channel_id = 0
+admin_commands_channel_id = 0
+user_logs_forum_channel_id = 0
+response_logs_forum_channel_id = 0
+vital_logs_forum_channel_id = 0
+
+# Logging
+user_log_controls = true
+
+[storage]
+# Bot Settings
+database_path = "data/famd.sqlite"
+log_dir = "logs"
+
+# Logging
+proof_dir = "data/proofs"
+
+[time]
+# Shift Handling
+timezone = "Asia/Manila"
+week_start = "sunday"
+break_cap_minutes = 15
+break_warning_minutes = 14
+break_final_prompt_grace_minutes = 2
+break_cooldown_minutes = 0
+
+[logging]
+# Bot Settings
+level = "info"

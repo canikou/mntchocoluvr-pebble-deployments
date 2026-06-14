@@ -1,0 +1,18 @@
+[Payouts]
+# The bot reads the two sections below for payout calculations.
+
+[Hourly Rates]
+Head Director = 25000
+Medical Director = 24000
+Assistant Director = 23000
+Head of Department = 18000
+Attending Physician = 16000
+Fellow Resident = 14000
+Senior Resident = 10000
+Junior Resident = 8000
+Paramedic = 6000
+Intern = 4000
+
+[Log Rates]
+Response = 3000
+Vital = 3000
