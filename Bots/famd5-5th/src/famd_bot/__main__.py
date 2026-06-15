@@ -12,3 +12,7 @@ def main() -> int:
     parser.add_argument("--config", type=Path, default=None)
     args = parser.parse_args()
     return asyncio.run(run(args.config))
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
