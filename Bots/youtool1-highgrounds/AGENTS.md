@@ -4,9 +4,9 @@ This directory is the PebbleHost-ready deployment copy for internal bot `youtool
 
 ## Deployment Mapping
 
-- Deployment repo: `D:\! Coding Projects\! Deployments\mntchocoluvr-pebble-deployments`
+- Deployment repo: the repository root containing this `Bots/` directory.
 - Deployment subdirectory: `Bots/youtool1-highgrounds/`
-- Source workspace: `D:\! Coding Projects\! Bots\YOUTOOL1-highgrounds`
+- Source workspace: `! Bots/YOUTOOL1-highgrounds` in the same workspace root.
 - GitHub deployment repo: `canikou/mntchocoluvr-pebble-deployments`
 - GitHub source repo: `canikou/YOUTOOL1-highgrounds`
 

@@ -4,9 +4,9 @@ This directory is the PebbleHost-ready deployment copy for internal bot `uwu1`.
 
 ## Deployment Mapping
 
-- Deployment repo: `D:\! Coding Projects\! Deployments\mntchocoluvr-pebble-deployments`
+- Deployment repo: the repository root containing this `Bots/` directory.
 - Deployment subdirectory: `Bots/uwu1-tondonights/`
-- Source workspace: `D:\! Coding Projects\! Bots\UWU1-tondonights`
+- Source workspace: `! Bots/UWU1-tondonights` in the same workspace root.
 - GitHub deployment repo: `canikou/mntchocoluvr-pebble-deployments`
 - GitHub source repo: `canikou/UWU1-tondonights`
 

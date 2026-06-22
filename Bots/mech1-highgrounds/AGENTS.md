@@ -4,9 +4,9 @@ This directory is the PebbleHost-ready deployment copy for internal bot `mech1`.
 
 ## Deployment Mapping
 
-- Deployment repo: `D:\! Coding Projects\! Deployments\mntchocoluvr-pebble-deployments`
+- Deployment repo: the repository root containing this `Bots/` directory.
 - Deployment subdirectory: `Bots/mech1-highgrounds/`
-- Source workspace: `D:\! Coding Projects\! Bots\MECH1-highgrounds`
+- Source workspace: `! Bots/MECH1-highgrounds` in the same workspace root.
 - GitHub deployment repo: `canikou/mntchocoluvr-pebble-deployments`
 - GitHub source repo: `canikou/MECH1-highgrounds`
 
